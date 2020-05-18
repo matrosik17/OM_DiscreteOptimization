@@ -16,24 +16,23 @@ fn lower_bound(mut knapsack_volume: usize, sorted_items: &[Item]) -> usize {
 }
 
 fn upper_bound_mem(knapsack_volume: usize, sorted_items: &[Item], mem: &mut UpperBoundMem) -> usize {
-    if let Some(upper_bound) = mem.get(&(knapsack_volume, sorted_items.len())) { *upper_bound }
-    else {
-        let mut curr_volume = knapsack_volume;
-        let mut max_value = 0;
+    if let Some(upper_bound) = mem.get(&(knapsack_volume, sorted_items.len())) { return *upper_bound; }
 
-        for (volume, value) in sorted_items.iter() {
-            if *volume < curr_volume {
-                curr_volume -= volume;
-                max_value += value;
-            } else {
-                let item_density = *value as f64 / *volume as f64;
-                max_value += (item_density * curr_volume as f64).ceil() as usize;
-                break;
-            }
+    let mut curr_volume = knapsack_volume;
+    let mut max_value = 0;
+
+    for (volume, value) in sorted_items.iter() {
+        if *volume < curr_volume {
+            curr_volume -= volume;
+            max_value += value;
+        } else {
+            let item_density = *value as f64 / *volume as f64;
+            max_value += (item_density * curr_volume as f64).ceil() as usize;
+            break;
         }
-        mem.insert((knapsack_volume, sorted_items.len()), max_value);
-        max_value
     }
+    mem.insert((knapsack_volume, sorted_items.len()), max_value);
+    max_value
 }
 
 fn knapsack_impl(
@@ -46,7 +45,7 @@ fn knapsack_impl(
     if items.len() == 0 { 0 }
     else {
         let ubound_estimation: usize = upper_bound_mem(knapsack_volume, &items, mem);
-        if current_value + ubound_estimation < *lower_bound { 0 }
+        if current_value + ubound_estimation <= *lower_bound { 0 }
         else {
             let (volume, value) = items[0];
             let result = if volume <= knapsack_volume {
@@ -66,7 +65,7 @@ fn knapsack_impl(
 
 fn knapsack(knapsack_volume: usize, items: &[Item]) -> usize {
     let mut max_value = lower_bound(knapsack_volume, &items);
-    let mut mem: UpperBoundMem = UpperBoundMem::with_capacity(2 * items.len());
+    let mut mem = UpperBoundMem::with_capacity(2 * items.len());
     knapsack_impl(0, knapsack_volume, &items, &mut max_value, &mut mem);
     max_value
 }
