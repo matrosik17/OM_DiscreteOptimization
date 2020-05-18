@@ -3,70 +3,58 @@ use std::collections::HashMap;
 type Item = (usize, usize);
 type UpperBoundMem = HashMap<(usize, usize), usize>;
 
-fn lower_bound(mut knapsack_volume: usize, sorted_items: &[Item]) -> usize {
-    let mut max_value: usize = 0;
-
-    for (volume, value) in sorted_items.iter() {
-        if *volume <= knapsack_volume {
-            knapsack_volume -= *volume;
-            max_value += *value;
-        }
-    }
-    max_value
-}
-
-fn upper_bound_mem(knapsack_volume: usize, sorted_items: &[Item], mem: &mut UpperBoundMem) -> usize {
-    if let Some(upper_bound) = mem.get(&(knapsack_volume, sorted_items.len())) { return *upper_bound; }
-
+fn calc_bounds(knapsack_volume: usize, sorted_items: &[Item]) -> (usize, usize) {
     let mut curr_volume = knapsack_volume;
-    let mut max_value = 0;
+    let mut lower_bound: usize = 0;
+    let mut upper_bound = None;
 
     for (volume, value) in sorted_items.iter() {
-        if *volume < curr_volume {
-            curr_volume -= volume;
-            max_value += value;
+        if *volume <= curr_volume {
+            curr_volume -= *volume;
+            lower_bound += *value;
         } else {
-            let item_density = *value as f64 / *volume as f64;
-            max_value += (item_density * curr_volume as f64).ceil() as usize;
-            break;
+            if lower_bound != 0 && upper_bound == None {
+                let item_density = *value as f64 / *volume as f64;
+                let last_part_value = (item_density * curr_volume as f64).ceil() as usize;
+                upper_bound = Some(lower_bound + last_part_value);
+            }
         }
     }
-    mem.insert((knapsack_volume, sorted_items.len()), max_value);
-    max_value
+    (lower_bound, upper_bound.unwrap_or(lower_bound))
 }
 
 fn knapsack_impl(
     current_value: usize,
     knapsack_volume: usize,
     items: &[Item],
-    lower_bound: &mut usize,
-    mem: &mut UpperBoundMem
+    max_value: &mut usize
 ) -> usize {
-    if items.len() == 0 { 0 }
-    else {
-        let ubound_estimation: usize = upper_bound_mem(knapsack_volume, &items, mem);
-        if current_value + ubound_estimation <= *lower_bound { 0 }
-        else {
-            let (volume, value) = items[0];
-            let result = if volume <= knapsack_volume {
-                std::cmp::max(
-                    value + knapsack_impl(current_value + value, knapsack_volume - volume, &items[1..], lower_bound, mem),
-                    knapsack_impl(current_value, knapsack_volume, &items[1..], lower_bound, mem)
-                )
-            } else {
-                knapsack_impl(current_value, knapsack_volume, &items[1..], lower_bound, mem)
-            };
+    if items.len() == 0 { return 0; }
 
-            if result > *lower_bound { *lower_bound = result; }
-            result
-        }
-    }
+    let (lower_bound, upper_bound) = calc_bounds(knapsack_volume, &items);
+    *max_value = std::cmp::max(*max_value, current_value + lower_bound);
+    if current_value + upper_bound <= *max_value { return 0; }
+
+    let min_volume_addition = items.iter().map(|x| x.0).min().unwrap();
+    if knapsack_volume < min_volume_addition { return 0; }
+
+    let (volume, value) = items[0];
+    let result = if volume <= knapsack_volume {
+        std::cmp::max(
+            value + knapsack_impl(current_value + value, knapsack_volume - volume, &items[1..], max_value),
+            knapsack_impl(current_value, knapsack_volume, &items[1..], max_value)
+        )
+    } else {
+        knapsack_impl(current_value, knapsack_volume, &items[1..], max_value)
+    };
+
+    if result > *max_value { *max_value = result; }
+    result
 }
 
 fn knapsack(knapsack_volume: usize, items: &[Item]) -> usize {
-    let mut max_value = lower_bound(knapsack_volume, &items);
-    let mut mem = UpperBoundMem::with_capacity(2 * items.len());
-    knapsack_impl(0, knapsack_volume, &items, &mut max_value, &mut mem);
+    let (mut max_value, _) = calc_bounds(knapsack_volume, &items);
+    knapsack_impl(0, knapsack_volume, &items, &mut max_value);
     max_value
 }
 
@@ -80,7 +68,9 @@ fn main() {
     let mut items: Vec<Item> = Vec::with_capacity(num_items);
     for _ in 0..num_items {
         let item: Item = (scan.token(), scan.token());
-        items.push(item);
+        if item.0 <= knapsack_volume {
+            items.push(item);
+        }
     }
 
     items.sort_unstable_by(|(w1, v1), (w2, v2)| {
