@@ -1,9 +1,10 @@
 use io::Scanner;
+use rng::Xoshiro256ss;
 use std::fmt;
 use std::fmt::Display;
 use std::time::Instant;
 
-struct BBProblem {
+struct BPProblem {
     pub capacity: usize,
     pub weights: Vec<usize>,
 }
@@ -11,34 +12,22 @@ struct BBProblem {
 #[derive(Clone)]
 struct Packing {
     pub indices: Vec<usize>,
+    pub bin_weights: Vec<usize>,
 }
 
 impl Packing {
-    // pub fn len(&self) -> usize {
-    //     self.indices.len()
-    // }
-
-    // pub fn put_item(&mut self, bin_idx: usize) {
-    //     self.indices.push(bin_idx);
-    // }
-
-    // pub fn truncate(&mut self, len: usize) {
-    //     self.indices.truncate(len);
-    // }
-
-    pub fn num_bins(&self) -> usize {
-        *self.indices.iter().max().unwrap_or(&0) + 1
+    pub fn from_indices(indices: Vec<usize>, problem: &BPProblem) -> Self {
+        let n_bins = *indices.iter().max().unwrap_or(&0) + 1;
+        let mut bin_weights = vec![0; n_bins];
+        for (item_idx, bin_idx) in indices.iter().enumerate() {
+            bin_weights[*bin_idx] += problem.weights[item_idx];
+        }
+        Self { indices, bin_weights }
     }
 
-    // pub fn is_correct_packing(&self, problem: &BBProblem) -> bool {
-    //     let mut bins = vec![0_usize; self.num_bins()];
-    //     for (item_idx, bin_idx) in self.indices.iter().enumerate() {
-    //         let bin_weight = &mut bins[*bin_idx];
-    //         *bin_weight += problem.weights[item_idx];
-    //         if *bin_weight > problem.capacity { return false; }
-    //     }
-    //     true
-    // }
+    pub fn num_bins(&self) -> usize {
+        self.bin_weights.len()
+    }
 }
 
 impl Display for Packing {
@@ -51,7 +40,7 @@ impl Display for Packing {
     }
 }
 
-fn first_fit(problem: &BBProblem) -> Packing {
+fn first_fit(problem: &BPProblem) -> Packing {
     let mut indices: Vec<usize> = vec![std::usize::MAX; problem.weights.len()];
     let mut bin_spaces: Vec<usize> = Vec::with_capacity(indices.len());
 
@@ -75,33 +64,34 @@ fn first_fit(problem: &BBProblem) -> Packing {
             indices[item_idx] = bin_spaces.len() - 1;
         }
     }
-    Packing { indices }
+    Packing::from_indices(indices, problem)
 }
 
-fn lower_bound(problem: &BBProblem) -> usize {
+fn lower_bound(problem: &BPProblem) -> usize {
     let total_weight = problem.weights.iter().sum::<usize>() as f64;
     (total_weight / problem.capacity as f64).ceil() as usize
 }
 
-fn local_search(packing: Packing, problem: &BBProblem) -> Packing {
+fn local_search(packing: Packing, problem: &BPProblem, rng: &mut Xoshiro256ss) -> Packing {
     packing
 }
 
 const TIME_LIMIT: u128 = 10_000; // millis
 const STOP_TIME: u128 = TIME_LIMIT - 100;
 
-fn find_solution(problem: &BBProblem) -> Packing {
+fn find_solution(problem: &BPProblem) -> Packing {
     let lower = lower_bound(problem);
     let mut packing = first_fit(problem);
 
     let start_time = Instant::now();
+    let seed: u64 = 42;
+    let mut rng = Xoshiro256ss::new(seed);
     loop {
         if packing.num_bins() == lower { break; }
         else {
-            let curr_time = Instant::now();
-            let duration = curr_time.duration_since(start_time);
+            let duration = start_time.elapsed();
             if duration.as_millis() < STOP_TIME {
-                packing = local_search(packing, problem);
+                packing = local_search(packing, problem, &mut rng);
             } else {
                 break;
             }
@@ -118,7 +108,7 @@ fn main() {
     let n: usize = scan.token();
     let capacity: usize = scan.token();
     let weights: Vec<usize> = (0..n).map(|_| scan.token()).collect();
-    let problem = BBProblem { capacity, weights };
+    let problem = BPProblem { capacity, weights };
 
     let packing = find_solution(&problem);
     println!("{}", packing.num_bins());
@@ -202,9 +192,9 @@ mod rng {
     impl SplitMix64 {
         fn rand(&mut self) -> u64 {
             let mut result = self.state;
-            self.state = result + 0x9E3779B97f4A7C15;
-            result = (result ^ (result >> 30)) * 0xBF58476D1CE4E5B9;
-            result = (result ^ (result >> 27)) * 0x94D049BB133111EB;
+            self.state = result.wrapping_add(0x9E3779B97f4A7C15);
+            result = (result ^ (result >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+            result = (result ^ (result >> 27)).wrapping_mul(0x94D049BB133111EB);
             return result ^ (result >> 31);
         }
     }

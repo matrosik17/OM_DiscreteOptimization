@@ -20,7 +20,7 @@ mod rng {
         }
 
         pub fn rand(&mut self) -> u64 {
-            let result = Self::rol64(self.state[1] * 5, 7) * 9;
+            let result = Self::rol64(self.state[1].wrapping_mul(5), 7).wrapping_mul(9);
             let t = self.state[1] << 17;
 
             self.state[2] ^= self.state[0];
@@ -42,9 +42,9 @@ mod rng {
     impl SplitMix64 {
         fn rand(&mut self) -> u64 {
             let mut result = self.state;
-            self.state = result + 0x9E3779B97f4A7C15;
-            result = (result ^ (result >> 30)) * 0xBF58476D1CE4E5B9;
-            result = (result ^ (result >> 27)) * 0x94D049BB133111EB;
+            self.state = result.wrapping_add(0x9E3779B97f4A7C15);
+            result = (result ^ (result >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+            result = (result ^ (result >> 27)).wrapping_mul(0x94D049BB133111EB);
             return result ^ (result >> 31);
         }
     }
