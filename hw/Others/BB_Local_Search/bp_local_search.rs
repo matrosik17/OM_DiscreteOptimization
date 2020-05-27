@@ -9,33 +9,64 @@ struct BPProblem {
     pub weights: Vec<usize>,
 }
 
+#[derive(Default, Clone)]
+struct Bin {
+    pub items: Vec<usize>,
+}
+
+impl Bin {
+    pub fn weight(&self, problem: &BPProblem) -> usize {
+        self.items.iter().map(|item_idx| problem.weights[*item_idx]).sum()
+    }
+
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+}
+
 #[derive(Clone)]
 struct Packing {
-    pub indices: Vec<usize>,
-    pub bin_weights: Vec<usize>,
+    pub bins: Vec<Bin>,
 }
 
 impl Packing {
-    pub fn from_indices(indices: Vec<usize>, problem: &BPProblem) -> Self {
+    pub fn from_indices(indices: Vec<usize>) -> Self {
         let n_bins = *indices.iter().max().unwrap_or(&0) + 1;
-        let mut bin_weights = vec![0; n_bins];
+        let mut bins = vec![Bin::default(); n_bins];
         for (item_idx, bin_idx) in indices.iter().enumerate() {
-            bin_weights[*bin_idx] += problem.weights[item_idx];
+            bins[*bin_idx].items.push(item_idx);
         }
-        Self { indices, bin_weights }
+        Self { bins }
     }
 
     pub fn num_bins(&self) -> usize {
-        self.bin_weights.len()
+        self.bins.len()
     }
 }
 
 impl Display for Packing {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let result_str = self.indices.iter()
-            .map(|x| (x + 1).to_string())
+        let mut bin_dist: Vec<(usize, usize)> = self.bins.iter()
+            .enumerate()
+            .flat_map(|(bin_idx, bin)| {
+                bin.items.iter()
+                .map(move |item_idx| (*item_idx, bin_idx))
+            })
+            .collect();
+
+        bin_dist.sort_unstable_by(|(item1, _), (item2, _)| {
+            item1.cmp(item2)
+        });
+
+        let result_str = bin_dist.into_iter()
+            .map(|(_, bin_idx)| (bin_idx + 1).to_string())
             .collect::<Vec<String>>()
             .join(" ");
+
         write!(f, "{}", result_str)
     }
 }
@@ -64,7 +95,7 @@ fn first_fit(problem: &BPProblem) -> Packing {
             indices[item_idx] = bin_spaces.len() - 1;
         }
     }
-    Packing::from_indices(indices, problem)
+    Packing::from_indices(indices)
 }
 
 fn lower_bound(problem: &BPProblem) -> usize {
@@ -72,8 +103,81 @@ fn lower_bound(problem: &BPProblem) -> usize {
     (total_weight / problem.capacity as f64).ceil() as usize
 }
 
-fn local_search(packing: Packing, problem: &BPProblem, rng: &mut Xoshiro256ss) -> Packing {
+enum SearchStrategy {
+    Rebalance(usize, usize), // пробуем перераспределить обьекты между парой контейнеров
+    Disbalance(usize, usize), // пробуем разгрузить один контейнер и загрузить другой
+}
+
+fn rebalance_bins(
+    bins_idx: (usize, usize),
+    mut packing: Packing,
+    problem: &BPProblem,
+    rng: &mut Xoshiro256ss
+) -> Packing {
+    // TODO: перераспределять обьекты между контейнерами случайным образом
     packing
+}
+
+fn disbalance_bins(
+    bins_idx: (usize, usize),
+    mut packing: Packing,
+    problem: &BPProblem,
+    rng: &mut Xoshiro256ss
+) -> Packing {
+    let (bin1_idx, bin2_idx) = bins_idx;
+    let weight1 = packing.bins[bin1_idx].weight(problem);
+    let weight2 = packing.bins[bin2_idx].weight(problem);
+
+    let (bin1_idx, bin2_idx) = if weight1 >= weight2 {
+        (bin1_idx, bin2_idx)
+    } else {
+        (bin2_idx, bin1_idx)
+    };
+
+    // вычисляем свободное место в большем контейнере
+    let free_space1 = problem.capacity - packing.bins[bin1_idx].weight(problem);
+    if free_space1 == 0 { return packing; }
+    // выбираем случайный обьект из меньшего контейнера
+    let item_from2_idx = rng.rand() as usize % packing.bins[bin2_idx].len();
+    let item_from2 = packing.bins[bin2_idx].items[item_from2_idx];
+    // пробуем переложить обьект
+    if problem.weights[item_from2] < free_space1 {
+        packing.bins[bin1_idx].items.push(item_from2);
+        packing.bins[bin2_idx].items.remove(item_from2_idx);
+        if packing.bins[bin2_idx].is_empty() { packing.bins.remove(bin2_idx); }
+    } else { // если не удается, то пытаемся обменяться обьектами с увеличением веса первого контейнера
+        let min_weight = problem.weights[item_from2] - free_space1;
+        let max_weight = problem.weights[item_from2];
+        let swap_element = packing.bins[bin1_idx].items.iter()
+            .enumerate()
+            .find(|(idx, &item_idx)| {
+                let weight = problem.weights[item_idx];
+                min_weight <= weight && weight < max_weight
+            });
+        if let Some((item_from1_idx, &item_from1)) = swap_element {
+            packing.bins[bin1_idx].items.remove(item_from1_idx);
+            packing.bins[bin2_idx].items.remove(item_from2_idx);
+
+            packing.bins[bin1_idx].items.push(item_from2);
+            packing.bins[bin2_idx].items.push(item_from1);
+        }
+    }
+    packing
+}
+
+fn local_search(packing: Packing, problem: &BPProblem, rng: &mut Xoshiro256ss) -> Packing {
+    let n_bins = packing.num_bins();
+    let bin_idx_pair = (rng.rand() as usize % n_bins, rng.rand() as usize % n_bins);
+
+    let strategy = match bin_idx_pair {
+        (n, m) if n == m => SearchStrategy::Rebalance(n, (n+1) % n_bins),
+        (n, m) => SearchStrategy::Disbalance(n, m),
+    };
+
+    match strategy {
+        SearchStrategy::Rebalance(n, m) => rebalance_bins((n, m), packing, problem, rng),
+        SearchStrategy::Disbalance(n, m) => disbalance_bins((n, m), packing, problem, rng),
+    }
 }
 
 const TIME_LIMIT: u128 = 10_000; // millis
@@ -96,7 +200,6 @@ fn find_solution(problem: &BPProblem) -> Packing {
                 break;
             }
         }
-
     }
     packing
 }
@@ -170,7 +273,7 @@ mod rng {
         }
 
         pub fn rand(&mut self) -> u64 {
-            let result = Self::rol64(self.state[1] * 5, 7) * 9;
+            let result = Self::rol64(self.state[1].wrapping_mul(5), 7).wrapping_mul(9);
             let t = self.state[1] << 17;
 
             self.state[2] ^= self.state[0];
