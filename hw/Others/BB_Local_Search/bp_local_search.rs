@@ -2,7 +2,7 @@ use io::Scanner;
 use rng::Xoshiro256ss;
 use std::fmt;
 use std::fmt::Display;
-use std::time::Instant;
+use std::time::{Instant, Duration};
 
 struct BPProblem {
     pub capacity: usize,
@@ -44,6 +44,10 @@ impl Packing {
     }
 
     pub fn num_bins(&self) -> usize {
+        self.bins.len()
+    }
+
+    pub fn len(&self) -> usize {
         self.bins.len()
     }
 }
@@ -104,17 +108,31 @@ fn lower_bound(problem: &BPProblem) -> usize {
 }
 
 enum SearchStrategy {
-    Rebalance(usize, usize), // пробуем перераспределить обьекты между парой контейнеров
+    Rebalance(usize), // пробуем перераспределить обьекты между контейнерами
     Disbalance(usize, usize), // пробуем разгрузить один контейнер и загрузить другой
 }
 
 fn rebalance_bins(
-    bins_idx: (usize, usize),
+    bin_idx: usize,
     mut packing: Packing,
     problem: &BPProblem,
     rng: &mut Xoshiro256ss
 ) -> Packing {
-    // TODO: перераспределять обьекты между контейнерами случайным образом
+    let bin_weight = packing.bins[bin_idx].weight(problem);
+
+    let other_bins_indices: Vec<usize> = (0..packing.len())
+        .filter(|x| *x != bin_idx)
+        .collect();
+
+    let mut other_bins_weights: Vec<usize> = other_bins_indices.iter()
+        .map(|&bin_idx| packing.bins[bin_idx].weight(problem))
+        .collect();
+
+    if bin_weight > problem.capacity / 2 { // пытаемся дозаполнить контейнер
+
+    } else { // пытаемся разгрузить контейнер
+
+    }
     packing
 }
 
@@ -150,11 +168,16 @@ fn disbalance_bins(
         let max_weight = problem.weights[item_from2];
         let swap_element = packing.bins[bin1_idx].items.iter()
             .enumerate()
-            .find(|(idx, &item_idx)| {
+            .find_map(|(idx, &item_idx)| {
                 let weight = problem.weights[item_idx];
-                min_weight <= weight && weight < max_weight
+                if min_weight <= weight && weight < max_weight {
+                    Some((idx, item_idx))
+                } else {
+                    None
+                }
             });
-        if let Some((item_from1_idx, &item_from1)) = swap_element {
+
+        if let Some((item_from1_idx, item_from1)) = swap_element {
             packing.bins[bin1_idx].items.remove(item_from1_idx);
             packing.bins[bin2_idx].items.remove(item_from2_idx);
 
@@ -170,18 +193,18 @@ fn local_search(packing: Packing, problem: &BPProblem, rng: &mut Xoshiro256ss) -
     let bin_idx_pair = (rng.rand() as usize % n_bins, rng.rand() as usize % n_bins);
 
     let strategy = match bin_idx_pair {
-        (n, m) if n == m => SearchStrategy::Rebalance(n, (n+1) % n_bins),
+        (n, m) if n == m => SearchStrategy::Rebalance(n),
         (n, m) => SearchStrategy::Disbalance(n, m),
     };
 
     match strategy {
-        SearchStrategy::Rebalance(n, m) => rebalance_bins((n, m), packing, problem, rng),
+        SearchStrategy::Rebalance(n) => rebalance_bins(n, packing, problem, rng),
         SearchStrategy::Disbalance(n, m) => disbalance_bins((n, m), packing, problem, rng),
     }
 }
 
-const TIME_LIMIT: u128 = 10_000; // millis
-const STOP_TIME: u128 = TIME_LIMIT - 100;
+const TIME_LIMIT: u64 = 10_000;
+const STOP_TIME: Duration = Duration::from_millis(TIME_LIMIT - 100);
 
 fn find_solution(problem: &BPProblem) -> Packing {
     let lower = lower_bound(problem);
@@ -194,7 +217,7 @@ fn find_solution(problem: &BPProblem) -> Packing {
         if packing.num_bins() == lower { break; }
         else {
             let duration = start_time.elapsed();
-            if duration.as_millis() < STOP_TIME {
+            if duration < STOP_TIME {
                 packing = local_search(packing, problem, &mut rng);
             } else {
                 break;
@@ -214,7 +237,7 @@ fn main() {
     let problem = BPProblem { capacity, weights };
 
     let packing = find_solution(&problem);
-    println!("{}", packing.num_bins());
+    // println!("{}", packing.num_bins());
     println!("{}", packing);
 }
 
