@@ -124,14 +124,45 @@ fn rebalance_bins(
         .filter(|x| *x != bin_idx)
         .collect();
 
-    let mut other_bins_weights: Vec<usize> = other_bins_indices.iter()
-        .map(|&bin_idx| packing.bins[bin_idx].weight(problem))
-        .collect();
-
     if bin_weight > problem.capacity / 2 { // пытаемся дозаполнить контейнер
+        let mut free_space = problem.capacity - bin_weight;
+        for &other_bin_idx in other_bins_indices.iter() {
+            let bin_item_idx = rng.rand() as usize % packing.bins[other_bin_idx].len();
+            let item_idx = packing.bins[other_bin_idx].items[bin_item_idx];
+            let item_weight = problem.weights[item_idx];
 
+            if item_weight < free_space {
+                free_space -= item_weight;
+                packing.bins[other_bin_idx].items.remove(bin_item_idx);
+                packing.bins[bin_idx].items.push(item_idx);
+            }
+        }
     } else { // пытаемся разгрузить контейнер
+        for &other_bin_idx in other_bins_indices.iter() {
+            let other_bin_weight = packing.bins[other_bin_idx].weight(problem);
+            let mut other_free_space = problem.capacity - other_bin_weight;
 
+            // выбираем обьекты для переноса в другой контейнер
+            let move_bin_items_indices: Vec<usize> = packing.bins[bin_idx].items.iter()
+                .enumerate()
+                .filter_map(|(bin_item_idx, &item_idx)| {
+                    let item_weight = problem.weights[item_idx];
+                    if item_weight < other_free_space {
+                        other_free_space -= item_weight;
+                        Some(bin_item_idx)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // переносим обьекты
+            for bin_item_idx in move_bin_items_indices {
+                let item_idx = packing.bins[bin_idx].items.remove(bin_item_idx);
+                packing.bins[other_bin_idx].items.push(item_idx);
+            }
+        }
+        if packing.bins[bin_idx].is_empty() { packing.bins.remove(bin_idx); }
     }
     packing
 }
@@ -204,7 +235,7 @@ fn local_search(packing: Packing, problem: &BPProblem, rng: &mut Xoshiro256ss) -
 }
 
 const TIME_LIMIT: u64 = 10_000;
-const STOP_TIME: Duration = Duration::from_millis(TIME_LIMIT - 100);
+const STOP_TIME: Duration = Duration::from_millis(TIME_LIMIT - 1);
 
 fn find_solution(problem: &BPProblem) -> Packing {
     let lower = lower_bound(problem);
