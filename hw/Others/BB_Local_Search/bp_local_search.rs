@@ -142,23 +142,21 @@ fn rebalance_bins(
             let other_bin_weight = packing.bins[other_bin_idx].weight(problem);
             let mut other_free_space = problem.capacity - other_bin_weight;
 
-            // выбираем обьекты для переноса в другой контейнер
-            let move_bin_items_indices: Vec<usize> = packing.bins[bin_idx].items.iter()
-                .enumerate()
-                .filter_map(|(bin_item_idx, &item_idx)| {
+            // разделяем обьекты
+            let (bin_items, other_bin_items): (Vec<usize>, Vec<usize>) = packing.bins[bin_idx].items
+                .iter()
+                .partition(|&&item_idx| {
                     let item_weight = problem.weights[item_idx];
-                    if item_weight < other_free_space {
-                        other_free_space -= item_weight;
-                        Some(bin_item_idx)
+                    if item_weight > other_free_space {
+                        true
                     } else {
-                        None
+                        other_free_space -= item_weight;
+                        false
                     }
-                })
-                .collect();
-
-            // переносим обьекты
-            for bin_item_idx in move_bin_items_indices {
-                let item_idx = packing.bins[bin_idx].items.remove(bin_item_idx);
+                });
+            // распределяем обьекты по контейнерам
+            packing.bins[bin_idx].items = bin_items;
+            for item_idx in other_bin_items {
                 packing.bins[other_bin_idx].items.push(item_idx);
             }
         }
@@ -194,7 +192,8 @@ fn disbalance_bins(
         packing.bins[bin1_idx].items.push(item_from2);
         packing.bins[bin2_idx].items.remove(item_from2_idx);
         if packing.bins[bin2_idx].is_empty() { packing.bins.remove(bin2_idx); }
-    } else { // если не удается, то пытаемся обменяться обьектами с увеличением веса первого контейнера
+    } else {
+        // если не удается, то пытаемся обменяться обьектами с увеличением веса первого контейнера
         let min_weight = problem.weights[item_from2] - free_space1;
         let max_weight = problem.weights[item_from2];
         let swap_element = packing.bins[bin1_idx].items.iter()
@@ -268,7 +267,6 @@ fn main() {
     let problem = BPProblem { capacity, weights };
 
     let packing = find_solution(&problem);
-    // println!("{}", packing.num_bins());
     println!("{}", packing);
 }
 
