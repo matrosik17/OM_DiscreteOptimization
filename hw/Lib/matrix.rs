@@ -21,6 +21,10 @@ mod matrix {
             Self::empty(size, size)
         }
 
+        pub fn size(&self) -> (usize, usize) {
+            (self.rows, self.columns)
+        }
+
         pub fn get_row(&self, row_idx: usize) -> &[T] {
             let start_idx = row_idx * self.columns;
             let stop_idx = start_idx + self.columns;
