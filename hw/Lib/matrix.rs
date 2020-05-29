@@ -1,4 +1,5 @@
 mod matrix {
+    use std::slice::{Iter, IterMut};
     use std::ops::{Index, IndexMut};
 
     pub struct Matrix<T: Default + Clone> {
@@ -6,6 +7,84 @@ mod matrix {
         columns: usize,
         elements: Vec<T>,
     }
+
+    pub struct RowIter<'a, T>(Iter<'a, T>) where T: Default + Clone;
+
+    impl<'a, T> Iterator for RowIter<'a, T>
+    where
+    T: Default + Clone,
+    {
+        type Item = &'a T;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            self.0.next()
+        }
+    }
+
+    pub struct RowIterMut<'a, T>(IterMut<'a, T>) where T: Default + Clone;
+
+    impl<'a, T> Iterator for RowIterMut<'a, T>
+    where
+        T: Default + Clone,
+    {
+        type Item = &'a mut T;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            self.0.next()
+        }
+    }
+
+    pub struct ColumnIter<'a, T>
+    where
+        T: Default + Clone,
+    {
+        row_idx: usize,
+        col_idx: usize,
+        matrix: &'a Matrix<T>,
+    }
+
+    impl<'a, T> Iterator for ColumnIter<'a, T>
+    where
+        T: Default + Clone,
+    {
+        type Item = &'a T;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.row_idx < self.matrix.rows {
+                let index = (self.row_idx, self.col_idx);
+                self.row_idx += 1;
+                Some(&self.matrix[index])
+            } else {
+                None
+            }
+        }
+    }
+
+    // pub struct ColumnIterMut<'a, T>
+    // where
+    //     T: Default + Clone,
+    // {
+    //     row_idx: usize,
+    //     col_idx: usize,
+    //     matrix: &'a mut Matrix<T>,
+    // }
+
+    // impl<'a, T> Iterator for ColumnIterMut<'a, T>
+    // where
+    //     T: Default + Clone,
+    // {
+    //     type Item = &'a mut T;
+
+    //     fn next(&mut self) -> Option<Self::Item> {
+    //         if self.row_idx < self.matrix.rows {
+    //             let index = (self.row_idx, self.col_idx);
+    //             self.row_idx += 1;
+    //             Some(&mut self.matrix[index])
+    //         } else {
+    //             None
+    //         }
+    //     }
+    // }
 
     impl<T: Default + Clone> Matrix<T> {
         pub fn new(rows: usize, columns: usize, elements: Vec<T>) -> Self {
@@ -21,15 +100,37 @@ mod matrix {
             Self::empty(size, size)
         }
 
-        pub fn size(&self) -> (usize, usize) {
+        pub fn shape(&self) -> (usize, usize) {
             (self.rows, self.columns)
         }
 
-        pub fn get_row(&self, row_idx: usize) -> &[T] {
+        pub fn row(&self, row_idx: usize) -> RowIter<T> {
             let start_idx = row_idx * self.columns;
             let stop_idx = start_idx + self.columns;
-            &self.elements[start_idx..stop_idx]
+            RowIter(self.elements[start_idx..stop_idx].iter())
         }
+
+        pub fn row_mut(&mut self, row_idx: usize) -> RowIterMut<T> {
+            let start_idx = row_idx * self.columns;
+            let stop_idx = start_idx + self.columns;
+            RowIterMut(self.elements[start_idx..stop_idx].iter_mut())
+        }
+
+        pub fn column(&self, col_idx: usize) -> ColumnIter<T> {
+            ColumnIter {
+                row_idx: 0,
+                col_idx,
+                matrix: &self
+            }
+        }
+
+        // pub fn column_mut(&self, col_idx: usize) -> ColumnIterMut<T> {
+        //     ColumnIterMut {
+        //         row_idx: 0,
+        //         col_idx,
+        //         matrix: &mut self
+        //     }
+        // }
     }
 
     impl<T: Default + Clone> Index<(usize, usize)> for Matrix<T> {
