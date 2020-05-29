@@ -19,6 +19,12 @@ mod matrix {
         pub fn new_squared(size: usize) -> Self {
             Self::new(size, size)
         }
+
+        pub fn get_row(&self, row_idx: usize) -> &[T] {
+            let start_idx = row_idx * self.columns;
+            let stop_idx = start_idx + self.columns;
+            &self.elements[start_idx..stop_idx]
+        }
     }
 
     impl<T: Default + Clone> Index<(usize, usize)> for Matrix<T> {
