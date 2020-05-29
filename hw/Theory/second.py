@@ -21,9 +21,12 @@ def solve_bp_decision(items: List[float], n_bins: int) -> bool:
 # You should leave function header intact
 def solve_bp_evaluation(items: List[float]) -> int:
     n_items = len(items)
+    n_bins = 0
     for n in range(n_items + 1):
         if solve_bp_decision(items, n):
-            return n
+            n_bins = n
+            break
+    return n_bins
 
 # You should leave function header intact
 def solve_bp_search(items: List[float]) -> List[int]:
