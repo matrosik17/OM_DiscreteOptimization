@@ -8,16 +8,17 @@ mod matrix {
     }
 
     impl<T: Default + Clone> Matrix<T> {
-        pub fn new(rows: usize, columns: usize) -> Self {
-            Self {
-                rows,
-                columns,
-                elements: vec![T::default(); rows * columns],
-            }
+        pub fn new(rows: usize, columns: usize, elements: Vec<T>) -> Self {
+            Self { rows, columns, elements }
         }
 
-        pub fn new_squared(size: usize) -> Self {
-            Self::new(size, size)
+        pub fn empty(rows: usize, columns: usize) -> Self {
+            let elements = vec![T::default(); rows * columns];
+            Self::new(rows, columns, elements)
+        }
+
+        pub fn empty_squared(size: usize) -> Self {
+            Self::empty(size, size)
         }
 
         pub fn get_row(&self, row_idx: usize) -> &[T] {
