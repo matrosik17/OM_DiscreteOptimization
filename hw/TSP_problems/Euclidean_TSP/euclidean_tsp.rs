@@ -1,8 +1,6 @@
 use io::Scanner;
-use matrix::Matrix;
-use graphs::Graph;
 use full_graph::FullGraph;
-use std::ops::Index;
+use std::cmp::Ordering;
 
 type Point = (i64, f64, f64);
 type Node = i64;
@@ -16,7 +14,6 @@ fn distance(p1: &Point, p2: &Point) -> Edge {
 }
 
 fn build_full_graph(points: &[Point]) -> FGraph {
-    let num_nodes = points.len();
     let nodes: Vec<Node> = points.iter()
         .map(|(p, _, _)| *p)
         .collect();
@@ -30,6 +27,49 @@ fn build_full_graph(points: &[Point]) -> FGraph {
     graph
 }
 
+fn build_mst(graph: &FGraph) -> Vec<(usize, usize)> {
+    let (n_nodes, _) = graph.shape();
+
+    let mut in_mst_nodes = vec![false; n_nodes];
+
+    in_mst_nodes[0] = true;
+    let mut edge_ends = vec![0_usize; n_nodes];
+    let mut edge_weights: Vec<Edge> = (0..n_nodes)
+        .map(|node_idx| graph[(0, node_idx)])
+        .collect();
+
+    for _ in 1..n_nodes {
+        let (new_mst_node_idx, _) = edge_weights.iter()
+            .enumerate()
+            .filter(|(node_idx, _)| !in_mst_nodes[*node_idx])
+            .min_by(|(_, w1), (_, w2)| match w1.partial_cmp(w2) {
+                Some(ord) => ord,
+                None => Ordering::Less,
+            })
+            .unwrap();
+
+        in_mst_nodes[new_mst_node_idx] = true;
+        for j in 0..n_nodes {
+            if in_mst_nodes[j] { continue; }
+            else {
+                if graph[(j, new_mst_node_idx)] < edge_weights[j] {
+                    edge_weights[j] = graph[(j, new_mst_node_idx)];
+                    edge_ends[j] = new_mst_node_idx;
+                }
+            }
+        }
+    }
+
+    let edges = edge_ends.into_iter()
+        .enumerate()
+        .filter_map(|edge| match edge {
+            (i, j) if i == j => None,
+            (i, j) => Some((i, j)),
+        })
+        .collect();
+    edges
+}
+
 fn main() {
     let stdin = std::io::stdin();
     let mut scan = Scanner::new(stdin.lock());
@@ -38,19 +78,12 @@ fn main() {
     let points: Vec<Point> = (0..n)
         .map(|_| (scan.token(), scan.token(), scan.token()))
         .collect();
-    println!("{:?}", points);
 
-    let mut matrix = Matrix::new(10, 10, vec![5; 100]);
-    let vec: Vec<usize> = matrix.row_mut(1)
-        .map(|x| *x)
-        .collect();
-    println!("{:?}", vec);
+    let graph = build_full_graph(&points);
+    println!("{:?}", graph.shape());
 
-    // let graph = build_full_graph(&points);
-    // println!("{:?}", graph.shape());
-    // let graph = FullGraph::new(&points);
-    // println!("{:?}", graph.edges.elements);
-
+    let mst_edges = build_mst(&graph);
+    println!("{:?}", mst_edges);
 }
 
 mod io {
@@ -87,7 +120,6 @@ mod io {
 }
 
 mod matrix {
-    use std::slice::{Iter, IterMut};
     use std::ops::{Index, IndexMut};
 
     pub struct Matrix<T: Default + Clone> {
@@ -95,84 +127,6 @@ mod matrix {
         columns: usize,
         elements: Vec<T>,
     }
-
-    pub struct RowIter<'a, T>(Iter<'a, T>) where T: Default + Clone;
-
-    impl<'a, T> Iterator for RowIter<'a, T>
-    where
-    T: Default + Clone,
-    {
-        type Item = &'a T;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            self.0.next()
-        }
-    }
-
-    pub struct RowIterMut<'a, T>(IterMut<'a, T>) where T: Default + Clone;
-
-    impl<'a, T> Iterator for RowIterMut<'a, T>
-    where
-        T: Default + Clone,
-    {
-        type Item = &'a mut T;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            self.0.next()
-        }
-    }
-
-    pub struct ColumnIter<'a, T>
-    where
-        T: Default + Clone,
-    {
-        row_idx: usize,
-        col_idx: usize,
-        matrix: &'a Matrix<T>,
-    }
-
-    impl<'a, T> Iterator for ColumnIter<'a, T>
-    where
-        T: Default + Clone,
-    {
-        type Item = &'a T;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            if self.row_idx < self.matrix.rows {
-                let index = (self.row_idx, self.col_idx);
-                self.row_idx += 1;
-                Some(&self.matrix[index])
-            } else {
-                None
-            }
-        }
-    }
-
-    // pub struct ColumnIterMut<'a, T>
-    // where
-    //     T: Default + Clone,
-    // {
-    //     row_idx: usize,
-    //     col_idx: usize,
-    //     matrix: &'a mut Matrix<T>,
-    // }
-
-    // impl<'a, T> Iterator for ColumnIterMut<'a, T>
-    // where
-    //     T: Default + Clone,
-    // {
-    //     type Item = &'a mut T;
-
-    //     fn next(&mut self) -> Option<Self::Item> {
-    //         if self.row_idx < self.matrix.rows {
-    //             let index = (self.row_idx, self.col_idx);
-    //             self.row_idx += 1;
-    //             Some(&mut self.matrix[index])
-    //         } else {
-    //             None
-    //         }
-    //     }
-    // }
 
     impl<T: Default + Clone> Matrix<T> {
         pub fn new(rows: usize, columns: usize, elements: Vec<T>) -> Self {
@@ -191,34 +145,6 @@ mod matrix {
         pub fn shape(&self) -> (usize, usize) {
             (self.rows, self.columns)
         }
-
-        pub fn row(&self, row_idx: usize) -> RowIter<T> {
-            let start_idx = row_idx * self.columns;
-            let stop_idx = start_idx + self.columns;
-            RowIter(self.elements[start_idx..stop_idx].iter())
-        }
-
-        pub fn row_mut(&mut self, row_idx: usize) -> RowIterMut<T> {
-            let start_idx = row_idx * self.columns;
-            let stop_idx = start_idx + self.columns;
-            RowIterMut(self.elements[start_idx..stop_idx].iter_mut())
-        }
-
-        pub fn column(&self, col_idx: usize) -> ColumnIter<T> {
-            ColumnIter {
-                row_idx: 0,
-                col_idx,
-                matrix: &self
-            }
-        }
-
-        // pub fn column_mut(&self, col_idx: usize) -> ColumnIterMut<T> {
-        //     ColumnIterMut {
-        //         row_idx: 0,
-        //         col_idx,
-        //         matrix: &mut self
-        //     }
-        // }
     }
 
     impl<T: Default + Clone> Index<(usize, usize)> for Matrix<T> {
@@ -240,22 +166,8 @@ mod matrix {
     }
 }
 
-mod graphs {
-    use std::ops::{Index, IndexMut};
-
-    pub trait Graph<N, E>:
-        Index<(usize, usize), Output=E>
-        + Index<usize, Output=N>
-        + IndexMut<(usize, usize)>
-        + IndexMut<usize>
-    {
-        fn shape(&self) -> (usize, usize);
-    }
-}
-
 mod full_graph {
     use matrix::Matrix;
-    use graphs::Graph;
     use std::ops::{Index, IndexMut};
 
     pub struct FullGraph<N, E>
@@ -283,14 +195,8 @@ mod full_graph {
             let edges = Matrix::empty_squared(num_nodes);
             Self { nodes, edges }
         }
-    }
 
-    impl<N, E> Graph<N, E> for FullGraph<N, E>
-    where
-        N: Default + Clone,
-        E: Default + Clone,
-    {
-        fn shape(&self) -> (usize, usize) {
+        pub fn shape(&self) -> (usize, usize) {
             let n_nodes = self.nodes.len();
             let n_edges = {
                 let (rows, cols) = self.edges.shape();
