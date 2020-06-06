@@ -1,10 +1,7 @@
-use io::Scanner;
-// use std::io::{BufRead};
+use std::io::{BufRead};
 use std::collections::{HashMap, VecDeque};
 
 type Island = (i64, i64, i64);
-type Edge = i64;
-type DMatrix = matrix::Matrix<Edge>;
 
 struct TravelInfo {
     dist_cost: i64,
@@ -43,27 +40,11 @@ impl TravelInfo {
 }
 
 
-fn distance(isl1: &Island, isl2: &Island) -> i64 {
+fn dist(isl1: &Island, isl2: &Island) -> i64 {
     let (x1, y1, _) = isl1;
     let (x2, y2, _) = isl2;
     let d2 = (x2 - x1).pow(2) + (y2 - y1).pow(2);
     (d2 as f64).sqrt().round() as i64
-}
-
-fn build_dist_matrix(islands: &[Island]) -> DMatrix {
-    let n_nodes = islands.len();
-    let mut matrix = DMatrix::empty_squared(n_nodes);
-    for i in 0..n_nodes {
-        for j in 0..n_nodes {
-            matrix[(i, j)] = distance(&islands[i], &islands[j]);
-        }
-    }
-    matrix
-}
-
-fn find_greedy_path(dist_matrix: &DMatrix) -> Vec<usize> {
-    let home_idx = 0;
-    let mut current_position = home_idx;
 }
 
 fn main() {
@@ -74,12 +55,6 @@ fn main() {
     let p: i64 = scan.token();
     let k: usize = scan.token();
     let m: i64 = scan.token();
-
-    let islands: Vec<Island> = (0..n)
-        .map(|_| (scan.token(), scan.token(), scan.token()))
-        .collect();
-
-    let dist_matrix = build_dist_matrix(&islands);
 
     let mut islands: HashMap<usize, Island> = HashMap::with_capacity(n);
     let mut attended_islands: HashMap<usize, Island> = HashMap::with_capacity(n);
@@ -141,82 +116,30 @@ fn main() {
     print!("{}", result);
 }
 
-mod io {
-    use std::io::BufRead;
-
-    pub struct Scanner<B> {
-        reader: B,
-        buf_str: String,
-        buf_iter: std::str::SplitWhitespace<'static>,
-    }
-
-    impl<B: BufRead> Scanner<B> {
-        pub fn new(reader: B) -> Self {
-            Self {
-                reader,
-                buf_str: String::new(),
-                buf_iter: "".split_whitespace(),
-            }
-        }
-        pub fn token<T: std::str::FromStr>(&mut self) -> T {
-            loop {
-                if let Some(token) = self.buf_iter.next() {
-                    return token.parse().ok().expect("Failed parse");
-                }
-                self.buf_str.clear();
-                self.reader
-                    .read_line(&mut self.buf_str)
-                    .expect("Failed read");
-                self.buf_iter = unsafe { std::mem::transmute(self.buf_str.split_whitespace()) };
-            }
-        }
-    }
-
+struct Scanner<B> {
+    reader: B,
+    buf_str: String,
+    buf_iter: std::str::SplitWhitespace<'static>,
 }
 
-mod matrix {
-    use std::ops::{Index, IndexMut};
-
-    pub struct Matrix<T: Default + Clone> {
-        rows: usize,
-        columns: usize,
-        elements: Vec<T>,
-    }
-
-    impl<T: Default + Clone> Matrix<T> {
-        pub fn new(rows: usize, columns: usize, elements: Vec<T>) -> Self {
-            Self { rows, columns, elements }
-        }
-
-        pub fn empty(rows: usize, columns: usize) -> Self {
-            let elements = vec![T::default(); rows * columns];
-            Self::new(rows, columns, elements)
-        }
-
-        pub fn empty_squared(size: usize) -> Self {
-            Self::empty(size, size)
-        }
-
-        pub fn shape(&self) -> (usize, usize) {
-            (self.rows, self.columns)
+impl<B: BufRead> Scanner<B> {
+    pub fn new(reader: B) -> Self {
+        Self {
+            reader,
+            buf_str: String::new(),
+            buf_iter: "".split_whitespace(),
         }
     }
-
-    impl<T: Default + Clone> Index<(usize, usize)> for Matrix<T> {
-        type Output = T;
-
-        fn index(&self, index2d: (usize, usize)) -> &Self::Output {
-            let (row_idx, col_idx) = index2d;
-            let element_idx = row_idx * self.columns + col_idx;
-            &self.elements[element_idx]
-        }
-    }
-
-    impl<T: Default + Clone> IndexMut<(usize, usize)> for Matrix<T> {
-        fn index_mut(&mut self, index2d: (usize, usize)) -> &mut T {
-            let (row_idx, col_idx) = index2d;
-            let element_idx = row_idx * self.columns + col_idx;
-            &mut self.elements[element_idx]
+    pub fn token<T: std::str::FromStr>(&mut self) -> T {
+        loop {
+            if let Some(token) = self.buf_iter.next() {
+                return token.parse().ok().expect("Failed parse");
+            }
+            self.buf_str.clear();
+            self.reader
+                .read_line(&mut self.buf_str)
+                .expect("Failed read");
+            self.buf_iter = unsafe { std::mem::transmute(self.buf_str.split_whitespace()) };
         }
     }
 }
