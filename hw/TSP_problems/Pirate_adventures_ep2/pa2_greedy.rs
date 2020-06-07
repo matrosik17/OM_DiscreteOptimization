@@ -204,12 +204,12 @@ fn local_search_add(mut path: Vec<usize>, pa_problem: &PAProblem) -> Vec<usize> 
     path
 }
 
-const TIME: Duration = Duration::from_secs(10 * 60);
+const TIME: Duration = Duration::from_secs(15 * 60);
 
 fn local_search(mut path: Vec<usize>, pa_problem: &PAProblem) -> Vec<usize> {
     path = local_search_add(path, pa_problem);
 
-    let seed: u64 = 42;
+    let seed: u64 = 424242;
     let mut rng = Xoshiro256ss::new(seed);
 
     let path_len = path.len();
